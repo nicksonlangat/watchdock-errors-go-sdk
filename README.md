@@ -6,6 +6,7 @@ Watchdock error tracking SDK for Go backends.
 
 - Async delivery to Watchdock ingest API
 - Manual `CaptureError` and `CaptureMessage`
+- Configurable event `Level` (defaults to `"error"` for errors, `"info"` for messages)
 - `net/http` middleware for unhandled panics
 - Request/user context support
 
@@ -36,8 +37,21 @@ func main() {
 
     watchdock.CaptureError(errors.New("payment provider rejected request"), nil)
     watchdock.CaptureMessage("background sync completed with warnings", nil)
+
+    // Override the default level via CaptureContext
+    watchdock.CaptureMessage("queue depth high", &watchdock.CaptureContext{
+        Level: "warning",
+    })
 }
 ```
+
+### Event levels
+
+Every event carries a `Level`. `CaptureError`/`CaptureErrorWithContext` default to `"error"`; `CaptureMessage`/`CaptureMessageWithContext` default to `"info"`. Override either by setting `CaptureContext.Level`.
+
+## SDK initialization
+
+`Init()` schedules a one-time, fire-and-forget ping to the platform (with the SDK version and environment) to register that the SDK started up. This runs in a background goroutine, never blocks `Init`, and any failure is silently ignored.
 
 ## net/http Middleware
 
