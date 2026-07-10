@@ -150,6 +150,68 @@ func TestCaptureMessageWithPIIEnabledPreservesPII(t *testing.T) {
 	}
 }
 
+func TestCaptureErrorDefaultsToErrorLevel(t *testing.T) {
+	t.Cleanup(resetGlobal)
+
+	var captured *Event
+
+	err := Init(Config{
+		APIKey: "wdk_test_key",
+		BeforeSend: func(event Event) (*Event, error) {
+			copy := event
+			captured = &copy
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	CaptureError(errors.New("boom"), nil)
+
+	if captured == nil {
+		t.Fatal("expected event to be captured in BeforeSend")
+	}
+
+	if captured.Level != "error" {
+		t.Fatalf("Level = %q, want %q", captured.Level, "error")
+	}
+}
+
+func TestCaptureMessageDefaultsToInfoLevelAndAcceptsOverride(t *testing.T) {
+	t.Cleanup(resetGlobal)
+
+	var captured *Event
+
+	err := Init(Config{
+		APIKey: "wdk_test_key",
+		BeforeSend: func(event Event) (*Event, error) {
+			copy := event
+			captured = &copy
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	CaptureMessage("disk almost full", nil)
+
+	if captured == nil {
+		t.Fatal("expected event to be captured in BeforeSend")
+	}
+
+	if captured.Level != "info" {
+		t.Fatalf("Level = %q, want %q", captured.Level, "info")
+	}
+
+	CaptureMessage("disk almost full", &CaptureContext{Level: "warning"})
+
+	if captured.Level != "warning" {
+		t.Fatalf("Level = %q, want %q", captured.Level, "warning")
+	}
+}
+
 func resetGlobal() {
 	globalMu.Lock()
 	defer globalMu.Unlock()

@@ -140,3 +140,15 @@ func overrideValue[T any](ptr *T, getter func(*T) string) string {
 func nowISO() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
+
+// baseURL strips the ingest API path from an endpoint, leaving just the
+// platform base URL (e.g. "https://api.watchdock.cc/api/v1/error-events/"
+// becomes "https://api.watchdock.cc"), so other platform routes can be built
+// from it.
+func baseURL(endpoint string) string {
+	trimmed := strings.TrimSuffix(endpoint, "/")
+	if idx := strings.Index(trimmed, "/api/v1/"); idx != -1 {
+		return trimmed[:idx]
+	}
+	return trimmed
+}
