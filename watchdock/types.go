@@ -44,6 +44,7 @@ type Event struct {
 	Title       string       `json:"title,omitempty"`
 	Timestamp   string       `json:"timestamp"`
 	Environment string       `json:"environment,omitempty"`
+	Level       string       `json:"level,omitempty"`
 	Release     string       `json:"release,omitempty"`
 	Exception   Exception    `json:"exception"`
 	Request     *RequestData `json:"request,omitempty"`
@@ -55,6 +56,7 @@ type Event struct {
 type CaptureContext struct {
 	Title       string
 	Environment string
+	Level       string
 	Release     string
 	Request     *RequestData
 	User        *UserData

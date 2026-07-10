@@ -50,6 +50,7 @@ func Init(config Config) error {
 	}
 
 	global = c
+	sendInitPing(config)
 	return nil
 }
 
@@ -61,6 +62,7 @@ func CaptureError(err error, capture *CaptureContext) {
 	sendEvent(Event{
 		Title:       captureTitle(err, capture),
 		Environment: captureValue(func() string { return capture.Environment }),
+		Level:       captureLevel(capture, "error"),
 		Release:     captureValue(func() string { return capture.Release }),
 		Exception:   buildException(err),
 	}, capture)
@@ -70,6 +72,7 @@ func CaptureMessage(message string, capture *CaptureContext) {
 	sendEvent(Event{
 		Title:       firstNonEmpty(captureValue(func() string { return capture.Title }), message),
 		Environment: captureValue(func() string { return capture.Environment }),
+		Level:       captureLevel(capture, "info"),
 		Release:     captureValue(func() string { return capture.Release }),
 		Exception: Exception{
 			Type:    "Message",
@@ -82,6 +85,7 @@ func CaptureErrorWithContext(ctx context.Context, err error, capture *CaptureCon
 	sendEventWithContext(ctx, Event{
 		Title:       captureTitle(err, capture),
 		Environment: captureValue(func() string { return capture.Environment }),
+		Level:       captureLevel(capture, "error"),
 		Release:     captureValue(func() string { return capture.Release }),
 		Exception:   buildException(err),
 	}, capture)
@@ -91,6 +95,7 @@ func CaptureMessageWithContext(ctx context.Context, message string, capture *Cap
 	sendEventWithContext(ctx, Event{
 		Title:       firstNonEmpty(captureValue(func() string { return capture.Title }), message),
 		Environment: captureValue(func() string { return capture.Environment }),
+		Level:       captureLevel(capture, "info"),
 		Release:     captureValue(func() string { return capture.Release }),
 		Exception: Exception{
 			Type:    "Message",
@@ -214,4 +219,41 @@ func captureTitle(err error, capture *CaptureContext) string {
 		return capture.Title
 	}
 	return err.Error()
+}
+
+func captureLevel(capture *CaptureContext, fallback string) string {
+	return firstNonEmpty(captureValue(func() string { return capture.Level }), fallback)
+}
+
+// sendInitPing fires a fire-and-forget POST to register SDK initialisation
+// with the platform. It waits before pinging to allow the server to be ready
+// at startup, and never blocks Init or raises on failure.
+func sendInitPing(config Config) {
+	go func() {
+		defer func() { _ = recover() }()
+
+		time.Sleep(5 * time.Second)
+
+		payload, err := json.Marshal(map[string]string{
+			"sdk_version": sdkVersion,
+			"environment": config.Environment,
+		})
+		if err != nil {
+			return
+		}
+
+		req, err := http.NewRequest(http.MethodPost, baseURL(config.Endpoint)+"/api/v1/errors/sdk-init/", bytes.NewReader(payload))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+
+		httpClient := &http.Client{Timeout: 3 * time.Second}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+	}()
 }
