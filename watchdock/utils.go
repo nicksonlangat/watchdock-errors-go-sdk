@@ -10,7 +10,7 @@ import (
 
 const (
 	sdkName    = "watchdock-errors-go-sdk"
-	sdkVersion = "0.1.0"
+	sdkVersion = "0.2.0"
 )
 
 func buildException(err error) Exception {
