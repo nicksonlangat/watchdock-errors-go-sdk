@@ -212,6 +212,74 @@ func TestCaptureMessageDefaultsToInfoLevelAndAcceptsOverride(t *testing.T) {
 	}
 }
 
+func TestCaptureErrorWithContextExtractsTraceID(t *testing.T) {
+	t.Cleanup(resetGlobal)
+
+	var captured *Event
+
+	err := Init(Config{
+		APIKey: "wdk_test_key",
+		BeforeSend: func(event Event) (*Event, error) {
+			copy := event
+			captured = &copy
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	ctx := WithScope(context.Background(), Scope{
+		Request: &RequestData{
+			Headers: map[string]string{"X-Request-Id": "req-abc123"},
+		},
+	})
+
+	CaptureErrorWithContext(ctx, errors.New("boom"), nil)
+
+	if captured == nil {
+		t.Fatal("expected event to be captured in BeforeSend")
+	}
+
+	if captured.TraceID != "req-abc123" {
+		t.Fatalf("TraceID = %q, want %q", captured.TraceID, "req-abc123")
+	}
+}
+
+func TestExplicitTraceIDWinsOverHeaderExtraction(t *testing.T) {
+	t.Cleanup(resetGlobal)
+
+	var captured *Event
+
+	err := Init(Config{
+		APIKey: "wdk_test_key",
+		BeforeSend: func(event Event) (*Event, error) {
+			copy := event
+			captured = &copy
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	ctx := WithScope(context.Background(), Scope{
+		Request: &RequestData{
+			Headers: map[string]string{"X-Request-Id": "from-header"},
+		},
+	})
+
+	CaptureErrorWithContext(ctx, errors.New("boom"), &CaptureContext{TraceID: "explicit-trace-id"})
+
+	if captured == nil {
+		t.Fatal("expected event to be captured in BeforeSend")
+	}
+
+	if captured.TraceID != "explicit-trace-id" {
+		t.Fatalf("TraceID = %q, want %q", captured.TraceID, "explicit-trace-id")
+	}
+}
+
 func resetGlobal() {
 	globalMu.Lock()
 	defer globalMu.Unlock()

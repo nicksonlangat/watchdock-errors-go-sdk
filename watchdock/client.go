@@ -64,6 +64,7 @@ func CaptureError(err error, capture *CaptureContext) {
 		Environment: captureValue(func() string { return capture.Environment }),
 		Level:       captureLevel(capture, "error"),
 		Release:     captureValue(func() string { return capture.Release }),
+		TraceID:     captureValue(func() string { return capture.TraceID }),
 		Exception:   buildException(err),
 	}, capture)
 }
@@ -74,6 +75,7 @@ func CaptureMessage(message string, capture *CaptureContext) {
 		Environment: captureValue(func() string { return capture.Environment }),
 		Level:       captureLevel(capture, "info"),
 		Release:     captureValue(func() string { return capture.Release }),
+		TraceID:     captureValue(func() string { return capture.TraceID }),
 		Exception: Exception{
 			Type:    "Message",
 			Message: message,
@@ -87,6 +89,7 @@ func CaptureErrorWithContext(ctx context.Context, err error, capture *CaptureCon
 		Environment: captureValue(func() string { return capture.Environment }),
 		Level:       captureLevel(capture, "error"),
 		Release:     captureValue(func() string { return capture.Release }),
+		TraceID:     captureValue(func() string { return capture.TraceID }),
 		Exception:   buildException(err),
 	}, capture)
 }
@@ -97,6 +100,7 @@ func CaptureMessageWithContext(ctx context.Context, message string, capture *Cap
 		Environment: captureValue(func() string { return capture.Environment }),
 		Level:       captureLevel(capture, "info"),
 		Release:     captureValue(func() string { return capture.Release }),
+		TraceID:     captureValue(func() string { return capture.TraceID }),
 		Exception: Exception{
 			Type:    "Message",
 			Message: message,
@@ -139,6 +143,9 @@ func sendEventWithContext(ctx context.Context, event Event, capture *CaptureCont
 	event.User = merged.User
 	event.Server = buildServerData(c.config.ServerName, merged.Server)
 	event.SDK = SDKData{Name: sdkName, Version: sdkVersion}
+	if event.TraceID == "" && merged.Request != nil {
+		event.TraceID = extractTraceID(merged.Request.Headers)
+	}
 
 	sanitizeEvent(&event, c.config.SendPII)
 

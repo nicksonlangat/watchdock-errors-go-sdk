@@ -141,6 +141,34 @@ func nowISO() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// extractTraceID pulls a correlation ID off incoming request headers so this
+// event can be linked back to the nginx access log line for the same
+// request. Prefers X-Request-Id (nginx's built-in $request_id, zero extra
+// modules required) and falls back to the trace-id segment of a W3C
+// traceparent header if present.
+func extractTraceID(headers map[string]string) string {
+	if headers == nil {
+		return ""
+	}
+
+	for key, value := range headers {
+		if strings.EqualFold(key, "x-request-id") && value != "" {
+			return value
+		}
+	}
+
+	for key, value := range headers {
+		if strings.EqualFold(key, "traceparent") && value != "" {
+			parts := strings.Split(value, "-")
+			if len(parts) >= 2 && parts[1] != "" {
+				return parts[1]
+			}
+		}
+	}
+
+	return ""
+}
+
 // baseURL strips the ingest API path from an endpoint, leaving just the
 // platform base URL (e.g. "https://api.watchdock.cc/api/v1/error-events/"
 // becomes "https://api.watchdock.cc"), so other platform routes can be built

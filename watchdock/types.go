@@ -46,6 +46,7 @@ type Event struct {
 	Environment string       `json:"environment,omitempty"`
 	Level       string       `json:"level,omitempty"`
 	Release     string       `json:"release,omitempty"`
+	TraceID     string       `json:"trace_id,omitempty"`
 	Exception   Exception    `json:"exception"`
 	Request     *RequestData `json:"request,omitempty"`
 	User        *UserData    `json:"user,omitempty"`
@@ -58,7 +59,11 @@ type CaptureContext struct {
 	Environment string
 	Level       string
 	Release     string
-	Request     *RequestData
-	User        *UserData
-	Server      *ServerData
+	// TraceID correlates this event with the originating nginx request
+	// (e.g. X-Request-Id). Takes priority over any value auto-extracted
+	// from Request.Headers if both are present.
+	TraceID string
+	Request *RequestData
+	User    *UserData
+	Server  *ServerData
 }

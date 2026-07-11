@@ -49,6 +49,18 @@ func main() {
 
 Every event carries a `Level`. `CaptureError`/`CaptureErrorWithContext` default to `"error"`; `CaptureMessage`/`CaptureMessageWithContext` default to `"info"`. Override either by setting `CaptureContext.Level`.
 
+## Correlating with nginx requests
+
+If your app is behind nginx and you've added `$request_id` to your access log format (see the [nginx log collection docs](https://watchdock.cc/docs/nginx-log-collection)) and forwarded it to your app via `proxy_set_header X-Request-Id $request_id;`, `CaptureErrorWithContext`/`CaptureMessageWithContext` automatically read that header off `Scope.Request.Headers` and attach it as `TraceID` — no code changes needed. This lets WatchDock link a failed request in your nginx access logs directly to the exception it produced.
+
+You can also set `CaptureContext.TraceID` explicitly, which takes priority over the auto-extracted value:
+
+```go
+watchdock.CaptureErrorWithContext(ctx, err, &watchdock.CaptureContext{
+    TraceID: myTraceID,
+})
+```
+
 ## SDK initialization
 
 `Init()` schedules a one-time, fire-and-forget ping to the platform (with the SDK version and environment) to register that the SDK started up. This runs in a background goroutine, never blocks `Init`, and any failure is silently ignored.
