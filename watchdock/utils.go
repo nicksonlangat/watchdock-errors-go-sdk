@@ -10,7 +10,7 @@ import (
 
 const (
 	sdkName    = "watchdock-errors-go-sdk"
-	sdkVersion = "0.2.0"
+	sdkVersion = "0.3.0"
 )
 
 func buildException(err error) Exception {
@@ -25,18 +25,30 @@ func errorType(err error) string {
 	return fmt.Sprintf("%T", err)
 }
 
+// contextLines is the number of source lines captured on each side of a
+// frame's failing line. Matches the window the backend and the other SDKs use.
+const contextLines = 2
+
 func callers() []StackFrame {
 	pcs := make([]uintptr, 32)
 	count := runtime.Callers(3, pcs)
 	frames := runtime.CallersFrames(pcs[:count])
 
 	stack := make([]StackFrame, 0, count)
+	// Read each source file at most once per capture: a stack usually has
+	// several frames from the same file, and a nil entry remembers a miss so we
+	// don't keep stat-ing a file that isn't on disk.
+	cache := map[string][]string{}
 	for {
 		frame, more := frames.Next()
+		contextLine, pre, post := sourceContext(frame.File, frame.Line, cache)
 		stack = append(stack, StackFrame{
-			Filename:   frame.File,
-			Function:   frame.Function,
-			LineNumber: frame.Line,
+			Filename:    frame.File,
+			Function:    frame.Function,
+			LineNumber:  frame.Line,
+			ContextLine: contextLine,
+			PreContext:  pre,
+			PostContext: post,
 		})
 		if !more {
 			break
@@ -44,6 +56,55 @@ func callers() []StackFrame {
 	}
 
 	return stack
+}
+
+// sourceContext returns the failing line plus the lines just before and after
+// it, when the source file is readable. Go records the compile-time path in
+// each frame, so this resolves in development and anywhere the source ships
+// with the binary; on a stripped production host it returns empty values and
+// the frame keeps just its location. Out-of-range lines come back as empty
+// strings so the pre/post slices are always contextLines long.
+func sourceContext(file string, line int, cache map[string][]string) (string, []string, []string) {
+	if file == "" || line <= 0 {
+		return "", nil, nil
+	}
+
+	lines, seen := cache[file]
+	if !seen {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			cache[file] = nil // remember the miss
+			return "", nil, nil
+		}
+		lines = strings.Split(string(data), "\n")
+		cache[file] = lines
+	}
+	if lines == nil {
+		return "", nil, nil
+	}
+
+	idx := line - 1 // frame line numbers are 1-based
+	if idx < 0 || idx >= len(lines) {
+		return "", nil, nil
+	}
+
+	at := func(n int) string { // n is a 1-based line number
+		if n >= 1 && n-1 < len(lines) {
+			return strings.TrimRight(lines[n-1], "\r")
+		}
+		return ""
+	}
+
+	pre := make([]string, 0, contextLines)
+	for i := line - contextLines; i < line; i++ {
+		pre = append(pre, at(i))
+	}
+	post := make([]string, 0, contextLines)
+	for i := line + 1; i <= line+contextLines; i++ {
+		post = append(post, at(i))
+	}
+
+	return strings.TrimSpace(at(line)), pre, post
 }
 
 func buildServerData(serverName string, override *ServerData) *ServerData {

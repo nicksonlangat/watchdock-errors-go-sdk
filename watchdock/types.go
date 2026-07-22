@@ -1,10 +1,12 @@
 package watchdock
 
 type StackFrame struct {
-	Filename    string `json:"filename"`
-	Function    string `json:"function,omitempty"`
-	LineNumber  int    `json:"lineno,omitempty"`
-	ContextLine string `json:"context_line,omitempty"`
+	Filename    string   `json:"filename"`
+	Function    string   `json:"function,omitempty"`
+	LineNumber  int      `json:"lineno,omitempty"`
+	ContextLine string   `json:"context_line,omitempty"`
+	PreContext  []string `json:"pre_context,omitempty"`
+	PostContext []string `json:"post_context,omitempty"`
 }
 
 type Exception struct {
