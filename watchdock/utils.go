@@ -2,6 +2,7 @@ package watchdock
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 const (
 	sdkName    = "watchdock-errors-go-sdk"
-	sdkVersion = "0.3.0"
+	sdkVersion = "0.4.0"
 )
 
 func buildException(err error) Exception {
@@ -140,6 +141,9 @@ func sanitizeEvent(event *Event, sendPII bool) {
 		if !sendPII && event.Request.Body != nil {
 			event.Request.Body = "[REDACTED]"
 		}
+		if !sendPII {
+			sanitizeQueryParams(event.Request)
+		}
 	}
 
 	if !sendPII && event.User != nil {
@@ -148,6 +152,64 @@ func sanitizeEvent(event *Event, sendPII bool) {
 			Username: event.User.Username,
 		}
 	}
+}
+
+// sensitiveQueryParamSubstrings mirrors the header denylist above but for query-param
+// names. Substring match, case-insensitive -- over-redacting an innocuous param (e.g.
+// "sort_key") costs far less than leaking a reset token, session id, or api key in a URL.
+var sensitiveQueryParamSubstrings = []string{
+	"token", "secret", "password", "passwd", "pwd", "auth", "key", "session", "credential", "otp", "pin", "ssn",
+}
+
+func isSensitiveQueryParam(name string) bool {
+	lowered := strings.ToLower(name)
+	for _, substr := range sensitiveQueryParamSubstrings {
+		if strings.Contains(lowered, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+// sanitizeQueryParams redacts sensitive values in both reqData.QueryParams and the raw
+// URL string, rebuilding the URL's query string from the redacted params so the two never
+// disagree. Headers and the body get their own scrubbing above, but the URL is often the
+// most PII-dense thing captured by default (reset tokens, magic links, api keys) and
+// previously passed through here untouched even with PII collection off.
+func sanitizeQueryParams(reqData *RequestData) {
+	for key, value := range reqData.QueryParams {
+		if !isSensitiveQueryParam(key) {
+			continue
+		}
+		if values, ok := value.([]string); ok {
+			redacted := make([]string, len(values))
+			for i := range values {
+				redacted[i] = "[REDACTED]"
+			}
+			reqData.QueryParams[key] = redacted
+		} else {
+			reqData.QueryParams[key] = "[REDACTED]"
+		}
+	}
+
+	if reqData.URL == "" {
+		return
+	}
+	parsed, err := url.Parse(reqData.URL)
+	if err != nil || parsed.RawQuery == "" {
+		return
+	}
+	values := parsed.Query()
+	for key := range values {
+		if !isSensitiveQueryParam(key) {
+			continue
+		}
+		for i := range values[key] {
+			values[key][i] = "[REDACTED]"
+		}
+	}
+	parsed.RawQuery = values.Encode()
+	reqData.URL = parsed.String()
 }
 
 func sanitizeHeaders(headers map[string]string, sendPII bool) map[string]string {

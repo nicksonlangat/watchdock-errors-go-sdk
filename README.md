@@ -73,6 +73,31 @@ handler := watchdock.Middleware(mux)
 http.ListenAndServe(":8080", handler)
 ```
 
+## PII scrubbing
+
+By default, `Authorization`, `Cookie`, and `Set-Cookie` headers are redacted, the request body is not sent, and sensitive-looking query-param values (names containing `token`, `secret`, `password`, `auth`, `key`, `session`, `credential`, `otp`, `pin`, `ssn`, etc.) are redacted in both `QueryParams` and the captured `URL` itself. `User` is reduced to just `ID` and `Username` (no `Email`). Set `SendPII: true` on `Config` to disable all of this scrubbing:
+
+```go
+watchdock.Init(watchdock.Config{
+	APIKey:  "wdk_xxx",
+	SendPII: true,
+})
+```
+
+Use `BeforeSend` for custom scrubbing:
+
+```go
+watchdock.Init(watchdock.Config{
+	APIKey: "wdk_xxx",
+	BeforeSend: func(event watchdock.Event) (*watchdock.Event, error) {
+		if event.Request != nil {
+			delete(event.Request.Headers, "X-Internal-Token")
+		}
+		return &event, nil // return nil to drop the event entirely
+	},
+})
+```
+
 ## Demo
 
 See [`demo/main.go`](./demo/main.go).
